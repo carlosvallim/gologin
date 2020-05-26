@@ -45,6 +45,8 @@ autobind:
 models:
   Usuario:
     model: github.com/carlosvallim/gologin/models.Usuario
+  Todo:
+    model: github.com/carlosvallim/gologin/models.Todo
   ID:
     model:
       - github.com/99designs/gqlgen/graphql.ID

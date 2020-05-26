@@ -10,6 +10,8 @@ import (
 	"github.com/pkg/errors"
 )
 
+var Db *sqlx.DB
+
 //ConnectPostgres - parametros de conexão com o banco de dados
 func ConnectPostgres() (*sqlx.DB, error) {
 	if err := godotenv.Load(); err != nil {

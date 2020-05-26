@@ -11,7 +11,7 @@ type Todo {
 
 type Usuario {
   id: Int!
-  name: String!
+  username: String!
   email: String!
   password: String!
 }
@@ -26,9 +26,15 @@ input NewTodo {
   userId: Int!
 }
 
+input Login {
+  username: String!
+  password: String!
+}
+
 type Mutation {
-  createTodo(input: NewTodo!): Todo!
-  createUsuario(name: String!, email: String!, password: String!): Boolean!
-  updateUsuario(id: Int!, name: String, email: String, password: String): Boolean!
+  createTodo(input: NewTodo!): Boolean!
+  createUsuario(username: String!, email: String!, password: String!): String!
+  updateUsuario(id: Int!, username: String, email: String, password: String): Boolean!
   deleteUsuario(id: Int!): Boolean!
+  login(input: Login!): Usuario
 }

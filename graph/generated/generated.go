@@ -46,9 +46,10 @@ type DirectiveRoot struct {
 type ComplexityRoot struct {
 	Mutation struct {
 		CreateTodo    func(childComplexity int, input model.NewTodo) int
-		CreateUsuario func(childComplexity int, name string, email string, password string) int
+		CreateUsuario func(childComplexity int, username string, email string, password string) int
 		DeleteUsuario func(childComplexity int, id int) int
-		UpdateUsuario func(childComplexity int, id int, name *string, email *string, password *string) int
+		Login         func(childComplexity int, input model.Login) int
+		UpdateUsuario func(childComplexity int, id int, username *string, email *string, password *string) int
 	}
 
 	Query struct {
@@ -66,19 +67,20 @@ type ComplexityRoot struct {
 	Usuario struct {
 		Email    func(childComplexity int) int
 		ID       func(childComplexity int) int
-		Name     func(childComplexity int) int
 		Password func(childComplexity int) int
+		Username func(childComplexity int) int
 	}
 }
 
 type MutationResolver interface {
-	CreateTodo(ctx context.Context, input model.NewTodo) (*model.Todo, error)
-	CreateUsuario(ctx context.Context, name string, email string, password string) (bool, error)
-	UpdateUsuario(ctx context.Context, id int, name *string, email *string, password *string) (bool, error)
+	CreateTodo(ctx context.Context, input model.NewTodo) (bool, error)
+	CreateUsuario(ctx context.Context, username string, email string, password string) (string, error)
+	UpdateUsuario(ctx context.Context, id int, username *string, email *string, password *string) (bool, error)
 	DeleteUsuario(ctx context.Context, id int) (bool, error)
+	Login(ctx context.Context, input model.Login) (*models.Usuario, error)
 }
 type QueryResolver interface {
-	Todos(ctx context.Context) ([]*model.Todo, error)
+	Todos(ctx context.Context) ([]*models.Todo, error)
 	Usuarios(ctx context.Context) ([]*models.Usuario, error)
 }
 
@@ -119,7 +121,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.CreateUsuario(childComplexity, args["name"].(string), args["email"].(string), args["password"].(string)), true
+		return e.complexity.Mutation.CreateUsuario(childComplexity, args["username"].(string), args["email"].(string), args["password"].(string)), true
 
 	case "Mutation.deleteUsuario":
 		if e.complexity.Mutation.DeleteUsuario == nil {
@@ -133,6 +135,18 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Mutation.DeleteUsuario(childComplexity, args["id"].(int)), true
 
+	case "Mutation.login":
+		if e.complexity.Mutation.Login == nil {
+			break
+		}
+
+		args, err := ec.field_Mutation_login_args(context.TODO(), rawArgs)
+		if err != nil {
+			return 0, false
+		}
+
+		return e.complexity.Mutation.Login(childComplexity, args["input"].(model.Login)), true
+
 	case "Mutation.updateUsuario":
 		if e.complexity.Mutation.UpdateUsuario == nil {
 			break
@@ -143,7 +157,7 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 			return 0, false
 		}
 
-		return e.complexity.Mutation.UpdateUsuario(childComplexity, args["id"].(int), args["name"].(*string), args["email"].(*string), args["password"].(*string)), true
+		return e.complexity.Mutation.UpdateUsuario(childComplexity, args["id"].(int), args["username"].(*string), args["email"].(*string), args["password"].(*string)), true
 
 	case "Query.todos":
 		if e.complexity.Query.Todos == nil {
@@ -201,19 +215,19 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 
 		return e.complexity.Usuario.ID(childComplexity), true
 
-	case "Usuario.name":
-		if e.complexity.Usuario.Name == nil {
-			break
-		}
-
-		return e.complexity.Usuario.Name(childComplexity), true
-
 	case "Usuario.password":
 		if e.complexity.Usuario.Password == nil {
 			break
 		}
 
 		return e.complexity.Usuario.Password(childComplexity), true
+
+	case "Usuario.username":
+		if e.complexity.Usuario.Username == nil {
+			break
+		}
+
+		return e.complexity.Usuario.Username(childComplexity), true
 
 	}
 	return 0, false
@@ -292,7 +306,7 @@ type Todo {
 
 type Usuario {
   id: Int!
-  name: String!
+  username: String!
   email: String!
   password: String!
 }
@@ -307,11 +321,17 @@ input NewTodo {
   userId: Int!
 }
 
+input Login {
+  username: String!
+  password: String!
+}
+
 type Mutation {
-  createTodo(input: NewTodo!): Todo!
-  createUsuario(name: String!, email: String!, password: String!): Boolean!
-  updateUsuario(id: Int!, name: String, email: String, password: String): Boolean!
+  createTodo(input: NewTodo!): Boolean!
+  createUsuario(username: String!, email: String!, password: String!): String!
+  updateUsuario(id: Int!, username: String, email: String, password: String): Boolean!
   deleteUsuario(id: Int!): Boolean!
+  login(input: Login!): Usuario
 }`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -338,13 +358,13 @@ func (ec *executionContext) field_Mutation_createUsuario_args(ctx context.Contex
 	var err error
 	args := map[string]interface{}{}
 	var arg0 string
-	if tmp, ok := rawArgs["name"]; ok {
+	if tmp, ok := rawArgs["username"]; ok {
 		arg0, err = ec.unmarshalNString2string(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["name"] = arg0
+	args["username"] = arg0
 	var arg1 string
 	if tmp, ok := rawArgs["email"]; ok {
 		arg1, err = ec.unmarshalNString2string(ctx, tmp)
@@ -378,6 +398,20 @@ func (ec *executionContext) field_Mutation_deleteUsuario_args(ctx context.Contex
 	return args, nil
 }
 
+func (ec *executionContext) field_Mutation_login_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
+	var err error
+	args := map[string]interface{}{}
+	var arg0 model.Login
+	if tmp, ok := rawArgs["input"]; ok {
+		arg0, err = ec.unmarshalNLogin2githubᚗcomᚋcarlosvallimᚋgologinᚋgraphᚋmodelᚐLogin(ctx, tmp)
+		if err != nil {
+			return nil, err
+		}
+	}
+	args["input"] = arg0
+	return args, nil
+}
+
 func (ec *executionContext) field_Mutation_updateUsuario_args(ctx context.Context, rawArgs map[string]interface{}) (map[string]interface{}, error) {
 	var err error
 	args := map[string]interface{}{}
@@ -390,13 +424,13 @@ func (ec *executionContext) field_Mutation_updateUsuario_args(ctx context.Contex
 	}
 	args["id"] = arg0
 	var arg1 *string
-	if tmp, ok := rawArgs["name"]; ok {
+	if tmp, ok := rawArgs["username"]; ok {
 		arg1, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
 		if err != nil {
 			return nil, err
 		}
 	}
-	args["name"] = arg1
+	args["username"] = arg1
 	var arg2 *string
 	if tmp, ok := rawArgs["email"]; ok {
 		arg2, err = ec.unmarshalOString2ᚖstring(ctx, tmp)
@@ -502,9 +536,9 @@ func (ec *executionContext) _Mutation_createTodo(ctx context.Context, field grap
 		}
 		return graphql.Null
 	}
-	res := resTmp.(*model.Todo)
+	res := resTmp.(bool)
 	fc.Result = res
-	return ec.marshalNTodo2ᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋgraphᚋmodelᚐTodo(ctx, field.Selections, res)
+	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Mutation_createUsuario(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -531,7 +565,7 @@ func (ec *executionContext) _Mutation_createUsuario(ctx context.Context, field g
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().CreateUsuario(rctx, args["name"].(string), args["email"].(string), args["password"].(string))
+		return ec.resolvers.Mutation().CreateUsuario(rctx, args["username"].(string), args["email"].(string), args["password"].(string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -543,9 +577,9 @@ func (ec *executionContext) _Mutation_createUsuario(ctx context.Context, field g
 		}
 		return graphql.Null
 	}
-	res := resTmp.(bool)
+	res := resTmp.(string)
 	fc.Result = res
-	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
+	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Mutation_updateUsuario(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -572,7 +606,7 @@ func (ec *executionContext) _Mutation_updateUsuario(ctx context.Context, field g
 	fc.Args = args
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return ec.resolvers.Mutation().UpdateUsuario(rctx, args["id"].(int), args["name"].(*string), args["email"].(*string), args["password"].(*string))
+		return ec.resolvers.Mutation().UpdateUsuario(rctx, args["id"].(int), args["username"].(*string), args["email"].(*string), args["password"].(*string))
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -630,6 +664,44 @@ func (ec *executionContext) _Mutation_deleteUsuario(ctx context.Context, field g
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
+func (ec *executionContext) _Mutation_login(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Mutation",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	rawArgs := field.ArgumentMap(ec.Variables)
+	args, err := ec.field_Mutation_login_args(ctx, rawArgs)
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	fc.Args = args
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Mutation().Login(rctx, args["input"].(model.Login))
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*models.Usuario)
+	fc.Result = res
+	return ec.marshalOUsuario2ᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐUsuario(ctx, field.Selections, res)
+}
+
 func (ec *executionContext) _Query_todos(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
@@ -659,9 +731,9 @@ func (ec *executionContext) _Query_todos(ctx context.Context, field graphql.Coll
 		}
 		return graphql.Null
 	}
-	res := resTmp.([]*model.Todo)
+	res := resTmp.([]*models.Todo)
 	fc.Result = res
-	return ec.marshalNTodo2ᚕᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋgraphᚋmodelᚐTodoᚄ(ctx, field.Selections, res)
+	return ec.marshalNTodo2ᚕᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐTodoᚄ(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_usuarios(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -767,7 +839,7 @@ func (ec *executionContext) _Query___schema(ctx context.Context, field graphql.C
 	return ec.marshalO__Schema2ᚖgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐSchema(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Todo_id(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
+func (ec *executionContext) _Todo_id(ctx context.Context, field graphql.CollectedField, obj *models.Todo) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -796,12 +868,12 @@ func (ec *executionContext) _Todo_id(ctx context.Context, field graphql.Collecte
 		}
 		return graphql.Null
 	}
-	res := resTmp.(string)
+	res := resTmp.(int)
 	fc.Result = res
-	return ec.marshalNID2string(ctx, field.Selections, res)
+	return ec.marshalNID2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Todo_text(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
+func (ec *executionContext) _Todo_text(ctx context.Context, field graphql.CollectedField, obj *models.Todo) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -835,7 +907,7 @@ func (ec *executionContext) _Todo_text(ctx context.Context, field graphql.Collec
 	return ec.marshalNString2string(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Todo_done(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
+func (ec *executionContext) _Todo_done(ctx context.Context, field graphql.CollectedField, obj *models.Todo) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -869,7 +941,7 @@ func (ec *executionContext) _Todo_done(ctx context.Context, field graphql.Collec
 	return ec.marshalNBoolean2bool(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Todo_usuario(ctx context.Context, field graphql.CollectedField, obj *model.Todo) (ret graphql.Marshaler) {
+func (ec *executionContext) _Todo_usuario(ctx context.Context, field graphql.CollectedField, obj *models.Todo) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -937,7 +1009,7 @@ func (ec *executionContext) _Usuario_id(ctx context.Context, field graphql.Colle
 	return ec.marshalNInt2int(ctx, field.Selections, res)
 }
 
-func (ec *executionContext) _Usuario_name(ctx context.Context, field graphql.CollectedField, obj *models.Usuario) (ret graphql.Marshaler) {
+func (ec *executionContext) _Usuario_username(ctx context.Context, field graphql.CollectedField, obj *models.Usuario) (ret graphql.Marshaler) {
 	defer func() {
 		if r := recover(); r != nil {
 			ec.Error(ctx, ec.Recover(ctx, r))
@@ -954,7 +1026,7 @@ func (ec *executionContext) _Usuario_name(ctx context.Context, field graphql.Col
 	ctx = graphql.WithFieldContext(ctx, fc)
 	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
 		ctx = rctx // use context from middleware stack in children
-		return obj.Name, nil
+		return obj.Username, nil
 	})
 	if err != nil {
 		ec.Error(ctx, err)
@@ -2094,6 +2166,30 @@ func (ec *executionContext) ___Type_ofType(ctx context.Context, field graphql.Co
 
 // region    **************************** input.gotpl *****************************
 
+func (ec *executionContext) unmarshalInputLogin(ctx context.Context, obj interface{}) (model.Login, error) {
+	var it model.Login
+	var asMap = obj.(map[string]interface{})
+
+	for k, v := range asMap {
+		switch k {
+		case "username":
+			var err error
+			it.Username, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		case "password":
+			var err error
+			it.Password, err = ec.unmarshalNString2string(ctx, v)
+			if err != nil {
+				return it, err
+			}
+		}
+	}
+
+	return it, nil
+}
+
 func (ec *executionContext) unmarshalInputNewTodo(ctx context.Context, obj interface{}) (model.NewTodo, error) {
 	var it model.NewTodo
 	var asMap = obj.(map[string]interface{})
@@ -2161,6 +2257,8 @@ func (ec *executionContext) _Mutation(ctx context.Context, sel ast.SelectionSet)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
+		case "login":
+			out.Values[i] = ec._Mutation_login(ctx, field)
 		default:
 			panic("unknown field " + strconv.Quote(field.Name))
 		}
@@ -2232,7 +2330,7 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 
 var todoImplementors = []string{"Todo"}
 
-func (ec *executionContext) _Todo(ctx context.Context, sel ast.SelectionSet, obj *model.Todo) graphql.Marshaler {
+func (ec *executionContext) _Todo(ctx context.Context, sel ast.SelectionSet, obj *models.Todo) graphql.Marshaler {
 	fields := graphql.CollectFields(ec.OperationContext, sel, todoImplementors)
 
 	out := graphql.NewFieldSet(fields)
@@ -2288,8 +2386,8 @@ func (ec *executionContext) _Usuario(ctx context.Context, sel ast.SelectionSet, 
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
-		case "name":
-			out.Values[i] = ec._Usuario_name(ctx, field, obj)
+		case "username":
+			out.Values[i] = ec._Usuario_username(ctx, field, obj)
 			if out.Values[i] == graphql.Null {
 				invalids++
 			}
@@ -2573,12 +2671,12 @@ func (ec *executionContext) marshalNBoolean2bool(ctx context.Context, sel ast.Se
 	return res
 }
 
-func (ec *executionContext) unmarshalNID2string(ctx context.Context, v interface{}) (string, error) {
-	return graphql.UnmarshalID(v)
+func (ec *executionContext) unmarshalNID2int(ctx context.Context, v interface{}) (int, error) {
+	return graphql.UnmarshalInt(v)
 }
 
-func (ec *executionContext) marshalNID2string(ctx context.Context, sel ast.SelectionSet, v string) graphql.Marshaler {
-	res := graphql.MarshalID(v)
+func (ec *executionContext) marshalNID2int(ctx context.Context, sel ast.SelectionSet, v int) graphql.Marshaler {
+	res := graphql.MarshalInt(v)
 	if res == graphql.Null {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "must not be null")
@@ -2601,6 +2699,10 @@ func (ec *executionContext) marshalNInt2int(ctx context.Context, sel ast.Selecti
 	return res
 }
 
+func (ec *executionContext) unmarshalNLogin2githubᚗcomᚋcarlosvallimᚋgologinᚋgraphᚋmodelᚐLogin(ctx context.Context, v interface{}) (model.Login, error) {
+	return ec.unmarshalInputLogin(ctx, v)
+}
+
 func (ec *executionContext) unmarshalNNewTodo2githubᚗcomᚋcarlosvallimᚋgologinᚋgraphᚋmodelᚐNewTodo(ctx context.Context, v interface{}) (model.NewTodo, error) {
 	return ec.unmarshalInputNewTodo(ctx, v)
 }
@@ -2619,11 +2721,11 @@ func (ec *executionContext) marshalNString2string(ctx context.Context, sel ast.S
 	return res
 }
 
-func (ec *executionContext) marshalNTodo2githubᚗcomᚋcarlosvallimᚋgologinᚋgraphᚋmodelᚐTodo(ctx context.Context, sel ast.SelectionSet, v model.Todo) graphql.Marshaler {
+func (ec *executionContext) marshalNTodo2githubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐTodo(ctx context.Context, sel ast.SelectionSet, v models.Todo) graphql.Marshaler {
 	return ec._Todo(ctx, sel, &v)
 }
 
-func (ec *executionContext) marshalNTodo2ᚕᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋgraphᚋmodelᚐTodoᚄ(ctx context.Context, sel ast.SelectionSet, v []*model.Todo) graphql.Marshaler {
+func (ec *executionContext) marshalNTodo2ᚕᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐTodoᚄ(ctx context.Context, sel ast.SelectionSet, v []*models.Todo) graphql.Marshaler {
 	ret := make(graphql.Array, len(v))
 	var wg sync.WaitGroup
 	isLen1 := len(v) == 1
@@ -2647,7 +2749,7 @@ func (ec *executionContext) marshalNTodo2ᚕᚖgithubᚗcomᚋcarlosvallimᚋgol
 			if !isLen1 {
 				defer wg.Done()
 			}
-			ret[i] = ec.marshalNTodo2ᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋgraphᚋmodelᚐTodo(ctx, sel, v[i])
+			ret[i] = ec.marshalNTodo2ᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐTodo(ctx, sel, v[i])
 		}
 		if isLen1 {
 			f(i)
@@ -2660,7 +2762,7 @@ func (ec *executionContext) marshalNTodo2ᚕᚖgithubᚗcomᚋcarlosvallimᚋgol
 	return ret
 }
 
-func (ec *executionContext) marshalNTodo2ᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋgraphᚋmodelᚐTodo(ctx context.Context, sel ast.SelectionSet, v *model.Todo) graphql.Marshaler {
+func (ec *executionContext) marshalNTodo2ᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐTodo(ctx context.Context, sel ast.SelectionSet, v *models.Todo) graphql.Marshaler {
 	if v == nil {
 		if !graphql.HasFieldError(ctx, graphql.GetFieldContext(ctx)) {
 			ec.Errorf(ctx, "must not be null")
@@ -2991,6 +3093,17 @@ func (ec *executionContext) marshalOString2ᚖstring(ctx context.Context, sel as
 		return graphql.Null
 	}
 	return ec.marshalOString2string(ctx, sel, *v)
+}
+
+func (ec *executionContext) marshalOUsuario2githubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐUsuario(ctx context.Context, sel ast.SelectionSet, v models.Usuario) graphql.Marshaler {
+	return ec._Usuario(ctx, sel, &v)
+}
+
+func (ec *executionContext) marshalOUsuario2ᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐUsuario(ctx context.Context, sel ast.SelectionSet, v *models.Usuario) graphql.Marshaler {
+	if v == nil {
+		return graphql.Null
+	}
+	return ec._Usuario(ctx, sel, v)
 }
 
 func (ec *executionContext) marshalO__EnumValue2ᚕgithubᚗcomᚋ99designsᚋgqlgenᚋgraphqlᚋintrospectionᚐEnumValueᚄ(ctx context.Context, sel ast.SelectionSet, v []introspection.EnumValue) graphql.Marshaler {
