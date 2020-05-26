@@ -5,7 +5,6 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/carlosvallim/gologin/dao"
 	"github.com/carlosvallim/gologin/models"
 	"github.com/jmoiron/sqlx"
 )
@@ -25,16 +24,15 @@ type contextKey struct {
 }
 
 type Authentication struct {
-	db        *sqlx.DB
-	jwtSecret string
+	db *sqlx.DB
 }
 
 // New cria uma nova instancia do autenticador
-func New(db *sqlx.DB, jwtSecret string) *Authentication {
-	return &Authentication{db, jwtSecret}
+func New(db *sqlx.DB) *Authentication {
+	return &Authentication{db}
 }
 
-//Middleware - função middleware de autenticação
+//HTTPMiddleware - função middleware de autenticação
 func (a *Authentication) HTTPMiddleware() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -53,17 +51,11 @@ func (a *Authentication) HTTPMiddleware() func(http.Handler) http.Handler {
 
 			//validate jwt token
 			tokenStr := c.Value
-			username, err := a.ValidateToken(tokenStr)
+
+			user, err := a.ValidateToken(tokenStr)
 			if err != nil {
 				ClearAuthToken(w)
-				next.ServeHTTP(w, r)
 				http.Error(w, "Invalid token", http.StatusForbidden)
-				return
-			}
-
-			// create user and check if user exists in db
-			user, err := dao.GetUserByUsername(username.Email)
-			if err != nil {
 				next.ServeHTTP(w, r)
 				return
 			}

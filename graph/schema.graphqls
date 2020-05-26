@@ -19,6 +19,7 @@ type Usuario {
 type Query {
   todos: [Todo!]!
   usuarios: [Usuario!]!
+  me: Usuario
 }
 
 input NewTodo {
@@ -36,5 +37,5 @@ type Mutation {
   createUsuario(username: String!, email: String!, password: String!): String!
   updateUsuario(id: Int!, username: String, email: String, password: String): Boolean!
   deleteUsuario(id: Int!): Boolean!
-  login(input: Login!): Usuario
+  login(input: Login!): String
 }

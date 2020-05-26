@@ -23,28 +23,22 @@ func main() {
 		port = defaultPort
 	}
 
-	router := chi.NewRouter()
-
-	jwtSecret := os.Getenv("JWT")
-	if jwtSecret == "" {
-		jwtSecret = "29607b9e17f4c5266a2d33aca075ab62"
-	}
-
-	a := auth.New(data.Db, jwtSecret)
+	a := auth.New(data.Db)
 
 	data.Db, _ = data.ConnectPostgres()
 	fmt.Println("Connection with database has a successful!")
 
-	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{}}))
-
+	router := chi.NewRouter()
 	router.Use(a.HTTPMiddleware())
 
-	http.Handle("/", playground.Handler("GraphQL playground", "/query"))
-	http.Handle("/query", srv)
+	srv := handler.NewDefaultServer(generated.NewExecutableSchema(generated.Config{Resolvers: &graph.Resolver{}}))
+
+	router.Handle("/", playground.Handler("GraphQL playground", "/query"))
+	router.Handle("/query", srv)
 	router.HandleFunc("/login", a.CreateTokenEndpoint)
 
 	log.Printf("connect to http://localhost:%s/ for GraphQL playground", port)
-	err := http.ListenAndServe(":"+port, nil)
+	err := http.ListenAndServe(":"+port, router)
 	if err != nil {
 		panic(err)
 	}

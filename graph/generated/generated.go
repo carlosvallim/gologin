@@ -53,6 +53,7 @@ type ComplexityRoot struct {
 	}
 
 	Query struct {
+		Me       func(childComplexity int) int
 		Todos    func(childComplexity int) int
 		Usuarios func(childComplexity int) int
 	}
@@ -77,11 +78,12 @@ type MutationResolver interface {
 	CreateUsuario(ctx context.Context, username string, email string, password string) (string, error)
 	UpdateUsuario(ctx context.Context, id int, username *string, email *string, password *string) (bool, error)
 	DeleteUsuario(ctx context.Context, id int) (bool, error)
-	Login(ctx context.Context, input model.Login) (*models.Usuario, error)
+	Login(ctx context.Context, input model.Login) (*string, error)
 }
 type QueryResolver interface {
 	Todos(ctx context.Context) ([]*models.Todo, error)
 	Usuarios(ctx context.Context) ([]*models.Usuario, error)
+	Me(ctx context.Context) (*models.Usuario, error)
 }
 
 type executableSchema struct {
@@ -158,6 +160,13 @@ func (e *executableSchema) Complexity(typeName, field string, childComplexity in
 		}
 
 		return e.complexity.Mutation.UpdateUsuario(childComplexity, args["id"].(int), args["username"].(*string), args["email"].(*string), args["password"].(*string)), true
+
+	case "Query.me":
+		if e.complexity.Query.Me == nil {
+			break
+		}
+
+		return e.complexity.Query.Me(childComplexity), true
 
 	case "Query.todos":
 		if e.complexity.Query.Todos == nil {
@@ -314,6 +323,7 @@ type Usuario {
 type Query {
   todos: [Todo!]!
   usuarios: [Usuario!]!
+  me: Usuario
 }
 
 input NewTodo {
@@ -331,7 +341,7 @@ type Mutation {
   createUsuario(username: String!, email: String!, password: String!): String!
   updateUsuario(id: Int!, username: String, email: String, password: String): Boolean!
   deleteUsuario(id: Int!): Boolean!
-  login(input: Login!): Usuario
+  login(input: Login!): String
 }`, BuiltIn: false},
 }
 var parsedSchema = gqlparser.MustLoadSchema(sources...)
@@ -697,9 +707,9 @@ func (ec *executionContext) _Mutation_login(ctx context.Context, field graphql.C
 	if resTmp == nil {
 		return graphql.Null
 	}
-	res := resTmp.(*models.Usuario)
+	res := resTmp.(*string)
 	fc.Result = res
-	return ec.marshalOUsuario2ᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐUsuario(ctx, field.Selections, res)
+	return ec.marshalOString2ᚖstring(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query_todos(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -768,6 +778,37 @@ func (ec *executionContext) _Query_usuarios(ctx context.Context, field graphql.C
 	res := resTmp.([]*models.Usuario)
 	fc.Result = res
 	return ec.marshalNUsuario2ᚕᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐUsuarioᚄ(ctx, field.Selections, res)
+}
+
+func (ec *executionContext) _Query_me(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
+	defer func() {
+		if r := recover(); r != nil {
+			ec.Error(ctx, ec.Recover(ctx, r))
+			ret = graphql.Null
+		}
+	}()
+	fc := &graphql.FieldContext{
+		Object:   "Query",
+		Field:    field,
+		Args:     nil,
+		IsMethod: true,
+	}
+
+	ctx = graphql.WithFieldContext(ctx, fc)
+	resTmp, err := ec.ResolverMiddleware(ctx, func(rctx context.Context) (interface{}, error) {
+		ctx = rctx // use context from middleware stack in children
+		return ec.resolvers.Query().Me(rctx)
+	})
+	if err != nil {
+		ec.Error(ctx, err)
+		return graphql.Null
+	}
+	if resTmp == nil {
+		return graphql.Null
+	}
+	res := resTmp.(*models.Usuario)
+	fc.Result = res
+	return ec.marshalOUsuario2ᚖgithubᚗcomᚋcarlosvallimᚋgologinᚋmodelsᚐUsuario(ctx, field.Selections, res)
 }
 
 func (ec *executionContext) _Query___type(ctx context.Context, field graphql.CollectedField) (ret graphql.Marshaler) {
@@ -2311,6 +2352,17 @@ func (ec *executionContext) _Query(ctx context.Context, sel ast.SelectionSet) gr
 				if res == graphql.Null {
 					atomic.AddUint32(&invalids, 1)
 				}
+				return res
+			})
+		case "me":
+			field := field
+			out.Concurrently(i, func() (res graphql.Marshaler) {
+				defer func() {
+					if r := recover(); r != nil {
+						ec.Error(ctx, ec.Recover(ctx, r))
+					}
+				}()
+				res = ec._Query_me(ctx, field)
 				return res
 			})
 		case "__type":

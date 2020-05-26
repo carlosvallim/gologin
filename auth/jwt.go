@@ -17,6 +17,10 @@ const (
 	emailKey = "email"
 )
 
+var (
+	SecretKey = []byte("29607b9e17f4c5266a2d33aca075ab62")
+)
+
 // Credentials contem os dados necessarios para efetuar login
 type Credentials struct {
 	Email    string `json:"email"`
@@ -30,7 +34,7 @@ func (a *Authentication) GenerateToken(user *models.Usuario) (string, error) {
 		nameKey:  user.Username,
 		emailKey: user.Email,
 	})
-	tokenString, err := token.SignedString([]byte(a.jwtSecret))
+	tokenString, err := token.SignedString(SecretKey)
 	if err != nil {
 		log.Fatal("Error in generating key")
 		return "", err
@@ -45,15 +49,15 @@ func (a *Authentication) ValidateToken(tokenStr string) (*models.Usuario, error)
 	}
 
 	token, _ := jwt.Parse(tokenStr, func(token *jwt.Token) (interface{}, error) {
-		if _, ok := token.Method.(*jwt.SigningMethodHMAC); !ok {
-			return nil, fmt.Errorf("There was an error")
-		}
-		return []byte(a.jwtSecret), nil
+		return SecretKey, nil
 	})
+
 	if claims, ok := token.Claims.(jwt.MapClaims); ok && token.Valid {
-		var err error
-		id := int(claims[idKey].(int))
+
+		id := int(claims[idKey].(float64))
+
 		user, err := dao.GetUserByID(id)
+
 		if err != nil {
 			return nil, fmt.Errorf("não pode verificar usuário: %v", err)
 		}
